@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Deep Modern Palette */
+  --bg-primary: 240 25% 4%;
+  --bg-secondary: 240 25% 7%;
+  --bg-tertiary: 240 20% 12%;
+  
+  --text-primary: 0 0% 98%;
+  --text-muted: 240 5% 65%;
+  --text-dim: 240 5% 45%;
+
+  /* Premium Accents */
+  --accent-primary: 245 80% 65%;
+  --accent-secondary: 270 85% 65%;
+  --accent-glow: 245 80% 65% / 0.15;
+  
+  /* Status Colors */
+  --status-success: 155 90% 60%;
+  --status-warning: 45 95% 60%;
+  --status-error: 0 85% 60%;
+  --status-info: 210 90% 60%;
+
+  /* Glassmorphism */
+  --glass-bg: 240 25% 10% / 0.45;
+  --glass-border: 240 25% 100% / 0.08;
+  --glass-glow: 245 80% 65% / 0.05;
+}
+
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    border-color: hsl(var(--glass-border));
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-color: hsl(var(--bg-primary));
+    color: hsl(var(--text-primary));
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom Scrollbar - Premium Minimalist */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--bg-tertiary));
+    border-radius: 10px;
+    border: 1px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--accent-primary));
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: hsl(var(--glass-bg));
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid hsl(var(--glass-border));
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  }
+
+  .glass-card-hover {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .glass-card-hover:hover {
+    background: hsla(240, 25%, 15%, 0.5);
+    border-color: hsla(245, 80%, 65%, 0.3);
+    box-shadow: 0 0 20px hsla(245, 80%, 65%, 0.1);
+    transform: translateY(-2px);
+  }
+
+  .text-gradient {
+    background: linear-gradient(to right, #818cf8, #c084fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  
+  .btn-premium {
+    @apply relative overflow-hidden transition-all duration-300;
+  }
+  
+  .btn-premium::after {
+    content: '';
+    @apply absolute inset-0 opacity-0 transition-opacity duration-300 bg-gradient-to-r from-white/10 to-transparent;
+  }
+  
+  .btn-premium:hover::after {
+    @apply opacity-100;
+  }
+}
+
+@layer utilities {
+  .animate-slow-glow {
+    animation: slow-glow 8s ease-in-out infinite alternate;
+  }
+
+  @keyframes slow-glow {
+    from {
+      box-shadow: 0 0 20px hsla(245, 80%, 65%, 0.05);
+    }
+    to {
+      box-shadow: 0 0 40px hsla(245, 80%, 65%, 0.15);
+    }
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite linear;
+  }
+
+  @keyframes shimmer {
+    to {
+      background-position: 200% 0;
+    }
+  }
+}
+
+/* Base interactive transitions */
+a, button, input, select, textarea {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
