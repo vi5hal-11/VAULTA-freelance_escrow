@@ -81,6 +81,18 @@ export function useDisputeInfo(disputeId: bigint | number | undefined) {
   };
 }
 
+export function useDisputeEscrow(disputeId: bigint | number | undefined) {
+  const enabled = disputeId !== undefined;
+  const { data, isLoading } = useReadContract({
+    address: ARBITRATION_ADDRESS,
+    abi: ARBITRATION_ABI,
+    functionName: 'getDisputeEscrow',
+    args: enabled ? [BigInt(disputeId!)] : undefined,
+    query: { enabled },
+  });
+  return { escrow: data as `0x${string}` | undefined, isLoading };
+}
+
 export function useArbitrationActions() {
   const { writeContract, isPending, data: hash } = useWriteContract();
 

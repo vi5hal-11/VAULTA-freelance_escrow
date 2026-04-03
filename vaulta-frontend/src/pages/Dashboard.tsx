@@ -1,20 +1,18 @@
 import { Link } from 'react-router-dom';
 import { useAccount } from 'wagmi';
 import { motion } from 'framer-motion';
-import { FileText, Zap, DollarSign, AlertTriangle, ArrowRight, Plus } from 'lucide-react';
+import { FileText, Zap, DollarSign, AlertTriangle, ArrowRight, Plus, Loader2 } from 'lucide-react';
 
 import { useUserEscrows, useEscrowCount } from '@/hooks/useEscrowFactory';
+import { useEscrowData } from '@/hooks/useEscrow';
+import { useArbitrationData } from '@/hooks/useArbitration';
 import StatsCard from '@/components/dashboard/StatsCard';
 import ActivityFeed from '@/components/dashboard/ActivityFeed';
 import EscrowChart from '@/components/dashboard/EscrowChart';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import {
-  MOCK_ESCROWS,
-  MOCK_ACTIVITY,
-  MOCK_CHART_DATA,
-} from '@/lib/mockData';
-import { getStateLabel, cn } from '@/lib/utils';
+import { MOCK_ACTIVITY, MOCK_CHART_DATA } from '@/lib/mockData';
+import { formatEth, getStateLabel, shortenAddress } from '@/lib/utils';
 
 const STATE_BADGE_VARIANT: Record<number, 'info' | 'warning' | 'success' | 'danger' | 'default'> = {
   0: 'info',
@@ -34,9 +32,7 @@ const STAT_COLORS = {
 
 const stagger = {
   hidden: {},
-  show: {
-    transition: { staggerChildren: 0.1 },
-  },
+  show: { transition: { staggerChildren: 0.1 } },
 };
 
 const fadeUp = {
@@ -44,15 +40,70 @@ const fadeUp = {
   show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.23, 1, 0.32, 1] as any } },
 };
 
+/* ---- mini card for a single escrow address ---- */
+function DashboardEscrowItem({ address, index }: { address: `0x${string}`; index: number }) {
+  const data = useEscrowData(address);
+
+  if (data.isLoading) {
+    return (
+      <div className="flex items-center gap-3 rounded-2xl p-5 text-text-dim text-xs ring-1 ring-white/5">
+        <Loader2 className="w-4 h-4 animate-spin shrink-0" />
+        <span>{shortenAddress(address)}</span>
+      </div>
+    );
+  }
+
+  const state = Number(data.state ?? 0);
+  const totalAmount = data.totalAmount ?? 0n;
+  const milestoneCount = Number(data.milestoneCount ?? 0);
+  const currentMilestone = Number(data.currentMilestone ?? 0);
+  const jobTitle = data.jobMetadataHash || shortenAddress(address);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: -10 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.4, delay: index * 0.08 }}
+    >
+      <Link
+        to={`/escrow/${address}`}
+        className="group/item flex items-center justify-between rounded-2xl p-5 transition-all duration-300 hover:bg-white/[0.03] ring-1 ring-transparent hover:ring-white/5"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-bold text-text-primary group-hover/item:text-primary transition-colors truncate">
+            {jobTitle}
+          </p>
+          <div className="flex items-center gap-3 mt-1.5">
+            <span className="text-xs font-bold text-text-dim uppercase tracking-wider">
+              {formatEth(totalAmount)} ETH
+            </span>
+            <span className="w-1 h-1 rounded-full bg-white/10" />
+            <span className="text-xs font-medium text-text-muted">
+              Milestone {currentMilestone}/{milestoneCount}
+            </span>
+          </div>
+        </div>
+        <Badge
+          variant={STATE_BADGE_VARIANT[state] ?? 'default'}
+          className="capitalize px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest"
+        >
+          {getStateLabel(state)}
+        </Badge>
+      </Link>
+    </motion.div>
+  );
+}
+
 export default function Dashboard() {
   const { address } = useAccount();
   const { count } = useEscrowCount();
   const { escrows } = useUserEscrows(address);
+  const { disputeCount } = useArbitrationData();
 
-  const escrowCount = count !== undefined ? Number(count) : 12;
-  const activeCount = escrows.length > 0 ? escrows.length : 5;
-
-  const recentEscrows = MOCK_ESCROWS.slice(0, 5);
+  const escrowCount = count !== undefined ? Number(count) : 0;
+  const recentEscrows = escrows.slice(0, 5);
+  const activeCount = escrows.length;
+  const openDisputes = disputeCount !== undefined ? Number(disputeCount) : 0;
 
   return (
     <motion.div
@@ -91,24 +142,22 @@ export default function Dashboard() {
           color={STAT_COLORS.escrows}
         />
         <StatsCard
-          title="Active Contracts"
+          title="My Contracts"
           value={activeCount}
           icon={<Zap className="w-6 h-6" />}
           color={STAT_COLORS.active}
         />
         <StatsCard
           title="Total Value Locked"
-          value="24.5 ETH"
+          value="On-chain"
           icon={<DollarSign className="w-6 h-6" />}
           color={STAT_COLORS.tvl}
-          trend={{ value: 12, positive: true }}
         />
         <StatsCard
           title="Open Disputes"
-          value={2}
+          value={openDisputes}
           icon={<AlertTriangle className="w-6 h-6" />}
           color={STAT_COLORS.disputes}
-          trend={{ value: 5, positive: false }}
         />
       </motion.div>
 
@@ -140,46 +189,30 @@ export default function Dashboard() {
             </Link>
           </div>
 
-          <div className="space-y-4">
-            {recentEscrows.map((escrow, i) => (
-              <motion.div
-                key={escrow.address}
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: i * 0.08 }}
-              >
-                <Link
-                  to={`/escrow/${escrow.address}`}
-                  className="group/item flex items-center justify-between rounded-2xl p-5 transition-all duration-300 hover:bg-white/[0.03] ring-1 ring-transparent hover:ring-white/5"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-base font-bold text-text-primary group-hover/item:text-primary transition-colors truncate">
-                      {escrow.jobTitle}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <span className="text-xs font-bold text-text-dim uppercase tracking-wider">
-                        {escrow.totalAmount} ETH
-                      </span>
-                      <span className="w-1 h-1 rounded-full bg-white/10" />
-                      <span className="text-xs font-medium text-text-muted">
-                        Milestone {escrow.currentMilestone}/{escrow.milestoneCount}
-                      </span>
-                    </div>
-                  </div>
-                  <Badge 
-                    variant={STATE_BADGE_VARIANT[escrow.state] ?? 'default'}
-                    className="capitalize px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest"
-                  >
-                    {getStateLabel(escrow.state)}
-                  </Badge>
-                </Link>
-              </motion.div>
-            ))}
-          </div>
-          
-          <button className="mt-8 w-full py-4 rounded-xl border border-dashed border-white/10 text-xs font-bold text-text-muted hover:text-text-primary hover:border-white/20 transition-all uppercase tracking-widest">
-            Load More History
-          </button>
+          {!address ? (
+            <p className="text-sm text-text-muted text-center py-12">Connect your wallet to view contracts.</p>
+          ) : recentEscrows.length === 0 ? (
+            <div className="flex flex-col items-center py-12 gap-4">
+              <p className="text-sm text-text-muted">No contracts yet.</p>
+              <Link to="/escrow/create">
+                <Button size="sm" variant="secondary">Create your first escrow</Button>
+              </Link>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {recentEscrows.map((addr, i) => (
+                <DashboardEscrowItem key={addr} address={addr} index={i} />
+              ))}
+            </div>
+          )}
+
+          {escrows.length > 5 && (
+            <Link to="/escrows">
+              <button className="mt-8 w-full py-4 rounded-xl border border-dashed border-white/10 text-xs font-bold text-text-muted hover:text-text-primary hover:border-white/20 transition-all uppercase tracking-widest">
+                View All {escrows.length} Contracts
+              </button>
+            </Link>
+          )}
         </div>
 
         {/* Activity Feed - 4/12 */}
@@ -190,4 +223,3 @@ export default function Dashboard() {
     </motion.div>
   );
 }
-

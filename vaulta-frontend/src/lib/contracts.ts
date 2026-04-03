@@ -315,6 +315,13 @@ export const ARBITRATION_ABI = [
     stateMutability: 'view',
   },
   {
+    type: 'function',
+    name: 'getDisputeEscrow',
+    inputs: [{ name: 'disputeId', type: 'uint256', internalType: 'uint256' }],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }],
+    stateMutability: 'view',
+  },
+  {
     type: 'event',
     name: 'JurorStaked',
     inputs: [

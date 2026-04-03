@@ -126,4 +126,8 @@ contract Arbitration {
         Dispute storage d = disputes[disputeId];
         return (d.votesForClient, d.votesForFreelancer, d.resolved);
     }
+
+    function getDisputeEscrow(uint256 disputeId) external view returns (address) {
+        return disputes[disputeId].escrow;
+    }
 }

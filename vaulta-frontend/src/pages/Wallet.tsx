@@ -18,7 +18,9 @@ import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useStore } from '@/store/useStore';
-import { shortenAddress, cn } from '@/lib/utils';
+import { useUserEscrows } from '@/hooks/useEscrowFactory';
+import { useJurorStatus } from '@/hooks/useArbitration';
+import { formatEth, cn } from '@/lib/utils';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -46,6 +48,9 @@ export default function Wallet() {
   const { data: balance } = useBalance({ address });
   const addToast = useStore((s) => s.addToast);
   const [copied, setCopied] = useState(false);
+
+  const { escrows } = useUserEscrows(address);
+  const { stake: jurorStake } = useJurorStatus(address);
 
   const copyAddress = () => {
     if (address) {
@@ -163,8 +168,8 @@ export default function Wallet() {
             </div>
             <Badge variant="success" className="text-[9px] font-black uppercase">Active</Badge>
           </div>
-          <p className="text-2xl font-black text-text-primary">3</p>
-          <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mt-1">Active Escrows</p>
+          <p className="text-2xl font-black text-text-primary">{escrows.length}</p>
+          <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mt-1">My Escrows</p>
         </Card>
 
         <Card className="p-6">
@@ -174,7 +179,9 @@ export default function Wallet() {
             </div>
             <Badge variant="info" className="text-[9px] font-black uppercase">Staked</Badge>
           </div>
-          <p className="text-2xl font-black text-text-primary">0.15 ETH</p>
+          <p className="text-2xl font-black text-text-primary">
+            {jurorStake !== undefined ? `${formatEth(jurorStake)} ETH` : '0 ETH'}
+          </p>
           <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mt-1">Juror Stake</p>
         </Card>
 
@@ -183,10 +190,10 @@ export default function Wallet() {
             <div className="w-10 h-10 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center text-green-500">
               <CheckCircle className="w-5 h-5" />
             </div>
-            <Badge variant="success" className="text-[9px] font-black uppercase">Completed</Badge>
+            <Badge variant="success" className="text-[9px] font-black uppercase">On-chain</Badge>
           </div>
-          <p className="text-2xl font-black text-text-primary">7</p>
-          <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mt-1">Settled Contracts</p>
+          <p className="text-2xl font-black text-text-primary">{escrows.length}</p>
+          <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mt-1">Total Contracts</p>
         </Card>
       </motion.div>
 

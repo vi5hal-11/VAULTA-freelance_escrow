@@ -13,11 +13,14 @@ import {
   ArrowRight,
   Sparkles,
 } from 'lucide-react';
+import { useWaitForTransactionReceipt, useWriteContract } from 'wagmi';
+import { parseEther } from 'viem';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { useCreateEscrow } from '@/hooks/useEscrowFactory';
 import { useStore } from '@/store/useStore';
+import { ESCROW_ABI, FACTORY_ADDRESS } from '@/lib/contracts';
 import { cn } from '@/lib/utils';
 
 interface Milestone {
@@ -52,10 +55,16 @@ const SLIDE_VARIANTS = {
 export default function CreateEscrow() {
   const navigate = useNavigate();
   const { addToast } = useStore();
-  const { createEscrow, isPending, isSuccess } = useCreateEscrow();
+  const { createEscrow, isPending: isCreating, hash: createHash } = useCreateEscrow();
+  const { writeContract: writeMilestones, isPending: isAddingMilestones, isSuccess: milestonesSuccess } = useWriteContract();
+  const isPending = isCreating || isAddingMilestones;
+
+  // Wait for the createEscrow tx to be mined so we can parse the new escrow address
+  const { data: receipt } = useWaitForTransactionReceipt({ hash: createHash });
 
   const [currentStep, setCurrentStep] = useState(0);
   const [direction, setDirection] = useState(1);
+  const [newEscrowAddress, setNewEscrowAddress] = useState<`0x${string}` | null>(null);
 
   // Step 1
   const [projectTitle, setProjectTitle] = useState('');
@@ -122,15 +131,34 @@ export default function CreateEscrow() {
     );
   };
 
+  // Phase 1: when createEscrow tx is mined, extract new escrow address and call addMilestones
   useEffect(() => {
-    if (isSuccess) {
-      addToast({
-        type: 'success',
-        message: 'Escrow contract deployed successfully!',
-      });
+    if (!receipt) return;
+    // EscrowCreated(address indexed escrow, ...) — escrow address is topics[1]
+    const log = receipt.logs.find(
+      (l) => l.address.toLowerCase() === FACTORY_ADDRESS.toLowerCase()
+    );
+    if (!log || !log.topics[1]) return;
+    const escrow = `0x${log.topics[1].slice(26)}` as `0x${string}`;
+    setNewEscrowAddress(escrow);
+    addToast({ type: 'pending', message: 'Adding milestones on-chain...' });
+    const amounts = milestones.map((m) => parseEther(m.amount));
+    const hashes = milestones.map((m) => m.name);
+    writeMilestones({
+      address: escrow,
+      abi: ESCROW_ABI,
+      functionName: 'addMilestones',
+      args: [amounts, hashes],
+    });
+  }, [receipt]);
+
+  // Phase 2: milestones added — navigate away
+  useEffect(() => {
+    if (milestonesSuccess) {
+      addToast({ type: 'success', message: 'Escrow contract deployed successfully!' });
       navigate('/escrows');
     }
-  }, [isSuccess, addToast, navigate]);
+  }, [milestonesSuccess, addToast, navigate]);
 
   return (
     <motion.div
@@ -451,11 +479,12 @@ export default function CreateEscrow() {
                     variant="primary"
                     size="xl"
                     loading={isPending}
+                    disabled={isPending}
                     onClick={handleDeploy}
                     className="px-12 shadow-glow-primary"
                   >
-                    Deploy Contract
-                    <ArrowRight className="h-5 w-5 ml-2" />
+                    {isAddingMilestones ? 'Adding Milestones...' : isCreating ? 'Deploying...' : 'Deploy Contract'}
+                    {!isPending && <ArrowRight className="h-5 w-5 ml-2" />}
                   </Button>
                 </div>
               </div>
