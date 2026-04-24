@@ -1,4 +1,4 @@
-import { formatEther } from 'viem';
+import { formatEther, stringToHex, hexToString } from 'viem';
 
 export function shortenAddress(address: string, chars = 4): string {
   if (!address) return '';
@@ -37,4 +37,45 @@ export function getStateColor(state: number): string {
 
 export function cn(...classes: (string | undefined | false)[]): string {
   return classes.filter(Boolean).join(' ');
+}
+
+/**
+ * Encode a plain string to bytes32 (for contract calls).
+ * Silently truncates to 31 bytes to leave room for the null terminator.
+ */
+export function toBytes32(str: string): `0x${string}` {
+  return stringToHex(str.slice(0, 32), { size: 32 });
+}
+
+/**
+ * Decode a bytes32 hex value back to a human-readable string.
+ * Returns the raw hex if decoding fails (e.g. non-text bytes32).
+ */
+export function fromBytes32(hex: `0x${string}` | string): string {
+  try {
+    return hexToString(hex as `0x${string}`, { size: 32 });
+  } catch {
+    return hex;
+  }
+}
+
+const EXPLORER_BASES: Record<number, string> = {
+  1: 'https://etherscan.io',
+  11155111: 'https://sepolia.etherscan.io',
+  17000: 'https://holesky.etherscan.io',
+  8453: 'https://basescan.org',
+  84532: 'https://sepolia.basescan.org',
+  42161: 'https://arbiscan.io',
+  10: 'https://optimistic.etherscan.io',
+  137: 'https://polygonscan.com',
+};
+
+/**
+ * Returns a block explorer URL for the given chain and address.
+ * Returns null for local/unknown chains (e.g. Hardhat 31337).
+ */
+export function getExplorerUrl(chainId: number, address: string): string | null {
+  const base = EXPLORER_BASES[chainId];
+  if (!base) return null;
+  return `${base}/address/${address}`;
 }

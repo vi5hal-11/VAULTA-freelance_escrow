@@ -32,8 +32,10 @@ import {
   shortenAddress,
   formatEth,
   getStateLabel,
+  getExplorerUrl,
   cn,
 } from '@/lib/utils';
+import { useChainId } from 'wagmi';
 
 /* ------------------------------------------------------------------ */
 /*  Timeline Logic                                                      */
@@ -83,6 +85,7 @@ export default function ContractDetails() {
   const escrowAddress = address as `0x${string}` | undefined;
   const { address: userAddress } = useAccount();
   const addToast = useStore((s) => s.addToast);
+  const chainId = useChainId();
 
   const escrowData = useEscrowData(escrowAddress);
   const { actions, isPending } = useEscrowActions(escrowAddress);
@@ -95,14 +98,29 @@ export default function ContractDetails() {
   const isLoading = escrowData.isLoading;
   const data = escrowData;
 
-  const state = (data.state as number) ?? 0;
+  // `status` is the correct field name in the new contract (was `state`)
+  const state = (data.status as number) ?? 0;
   const client = data.client;
   const freelancer = data.freelancer;
   const totalAmount = data.totalAmount;
-  const currentMilestone = Number(data.currentMilestone ?? 0);
   const milestoneCount = Number(data.milestoneCount ?? 0);
   const jobMetadataHash = data.jobMetadataHash;
   const token = data.token;
+
+  // currentMilestone no longer exists on-chain; derive it from releasedAmount vs totalAmount.
+  // We approximate by comparing releasedAmount to per-milestone amounts — for display purposes
+  // use the simpler ratio: milestones paid ≈ releasedAmount / (totalAmount / milestoneCount).
+  const releasedAmount = data.releasedAmount ?? 0n;
+  const currentMilestone = (() => {
+    if (!data.totalAmount || milestoneCount === 0) return 0;
+    const perMilestone = data.totalAmount / BigInt(milestoneCount);
+    if (perMilestone === 0n) return 0;
+    const paid = Number(releasedAmount / perMilestone);
+    return Math.min(paid, milestoneCount);
+  })();
+
+  // Chain-aware Etherscan URL
+  const explorerUrl = address ? getExplorerUrl(chainId, address) : null;
 
   const isClient = userAddress && client && userAddress.toLowerCase() === client.toLowerCase();
   const isFreelancer = userAddress && freelancer && userAddress.toLowerCase() === freelancer.toLowerCase();
@@ -154,7 +172,8 @@ export default function ContractDetails() {
   };
 
   const handleRaiseDispute = () => {
-    actions.raiseDispute(0);
+    // raiseDispute() takes no args — internally calls Arbitration.createDispute()
+    actions.raiseDispute();
     addToast({ type: 'pending', message: 'Initiating arbitration...' });
   };
 
@@ -347,6 +366,22 @@ export default function ContractDetails() {
                     </div>
                   )}
 
+                  {/* Resolved: dispute outcome — client can release any approved milestones */}
+                  {state === 4 && (
+                    <div className="flex flex-col gap-3 w-full">
+                      <div className="flex items-center gap-3 px-5 py-3 rounded-2xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+                        <CheckCircle className="h-5 w-5" />
+                        <span className="text-sm font-black uppercase tracking-widest">Dispute Resolved</span>
+                      </div>
+                      {isClient && (
+                        <Button size="lg" loading={isPending} onClick={handleReleasePayment} className="shadow-glow-secondary">
+                          <DollarSign className="mr-2 h-5 w-5" />
+                          Release Awarded Payment
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
                   {/* Completion / Dispute States */}
                   {state === 3 && (
                      <div className="flex items-center gap-4 px-6 py-3 rounded-2xl bg-status-error/10 border border-status-error/20 text-status-error">
@@ -411,10 +446,16 @@ export default function ContractDetails() {
                     <span className="text-text-dim text-xs">Agreement Hash</span>
                     <p className="text-xs font-mono text-text-dim/60 truncate italic">{jobMetadataHash || '0x...'}</p>
                  </div>
-                 <Link to={`https://sepolia.etherscan.io/address/${address}`} target="_blank" className="mt-4 flex items-center justify-center gap-2 w-full py-4 rounded-2xl bg-white/[0.03] border border-white/10 text-xs font-black uppercase tracking-[0.2em] hover:bg-white/[0.06] transition-all">
-                    Etherscan Explorer
-                    <ExternalLink className="w-3.5 h-3.5" />
-                 </Link>
+                 {explorerUrl ? (
+                   <Link to={explorerUrl} target="_blank" className="mt-4 flex items-center justify-center gap-2 w-full py-4 rounded-2xl bg-white/[0.03] border border-white/10 text-xs font-black uppercase tracking-[0.2em] hover:bg-white/[0.06] transition-all">
+                     Block Explorer
+                     <ExternalLink className="w-3.5 h-3.5" />
+                   </Link>
+                 ) : (
+                   <div className="mt-4 flex items-center justify-center gap-2 w-full py-4 rounded-2xl bg-white/[0.02] border border-white/5 text-xs font-black uppercase tracking-[0.2em] text-text-dim">
+                     Local Network
+                   </div>
+                 )}
               </div>
            </motion.div>
         </div>

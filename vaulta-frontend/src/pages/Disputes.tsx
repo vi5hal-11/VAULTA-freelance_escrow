@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useAccount } from 'wagmi';
+import { useState, useEffect } from 'react';
+import { useAccount, useChainId } from 'wagmi';
 import { motion, AnimatePresence } from 'framer-motion';
 import { parseEther } from 'viem';
 import {
@@ -30,7 +30,7 @@ import {
 } from '@/hooks/useArbitration';
 import { useEscrowData } from '@/hooks/useEscrow';
 import { useStore } from '@/store/useStore';
-import { shortenAddress, formatEth, cn } from '@/lib/utils';
+import { shortenAddress, formatEth, getExplorerUrl, cn } from '@/lib/utils';
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -130,12 +130,15 @@ function DisputeDetail({
   const { actions, isPending } = useArbitrationActions();
   const addToast = useStore((s) => s.addToast);
 
+  const { jurorsPerDispute } = useArbitrationData();
+  const chainId = useChainId();
+
   const isJuror = userAddress
-    ? jurors.some((j) => j.toLowerCase() === userAddress.toLowerCase())
+    ? jurors.some((j) => j && j.toLowerCase() === userAddress.toLowerCase())
     : false;
 
   const status = resolved ? 'Resolved' : 'Voting';
-  const totalJurors = 3;
+  const totalJurors = jurorsPerDispute !== undefined ? Number(jurorsPerDispute) : 3;
   const cVotes = Number(clientVotes ?? 0);
   const fVotes = Number(freelancerVotes ?? 0);
   const winner = resolved ? (cVotes >= fVotes ? 'client' : 'freelancer') : undefined;
@@ -177,8 +180,8 @@ function DisputeDetail({
           </div>
 
           <div className="flex items-center gap-2">
-            {escrow && (
-              <a href={`https://sepolia.etherscan.io/address/${escrow}`} target="_blank" rel="noopener noreferrer">
+            {escrow && getExplorerUrl(chainId, escrow) && (
+              <a href={getExplorerUrl(chainId, escrow)!} target="_blank" rel="noopener noreferrer">
                 <Button variant="ghost" className="rounded-xl border border-white/10 hover:bg-white/5">
                   <ExternalLink className="w-4 h-4 mr-2" />
                   Explorer
@@ -386,11 +389,16 @@ export default function Disputes() {
   const addToast = useStore((s) => s.addToast);
   const { stake: jurorStake } = useJurorStatus(userAddress);
 
-  const [selectedId, setSelectedId] = useState<number>(1);
+  const [selectedId, setSelectedId] = useState<number>(0);
   const [stakeAmount, setStakeAmount] = useState('0.1');
 
   const total = disputeCount !== undefined ? Number(disputeCount) : 0;
   const disputeIds = Array.from({ length: total }, (_, i) => i + 1);
+
+  // Auto-select first dispute once data loads
+  useEffect(() => {
+    if (total > 0 && selectedId === 0) setSelectedId(1);
+  }, [total]);
 
   const handleStake = () => {
     if (!stakeAmount) return;

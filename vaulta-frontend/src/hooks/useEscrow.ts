@@ -1,5 +1,6 @@
 import { useReadContract, useWriteContract } from 'wagmi';
 import { ESCROW_ABI } from '@/lib/contracts';
+import { fromBytes32, toBytes32 } from '@/lib/utils';
 
 export function useEscrowData(address: `0x${string}` | undefined) {
   const enabled = !!address;
@@ -15,9 +16,10 @@ export function useEscrowData(address: `0x${string}` | undefined) {
     functionName: 'freelancer',
   });
 
-  const { data: state, isLoading: l3 } = useReadContract({
+  // New contract uses `status` (was `state`)
+  const { data: status, isLoading: l3 } = useReadContract({
     ...contractBase,
-    functionName: 'state',
+    functionName: 'status',
   });
 
   const { data: totalAmount, isLoading: l4 } = useReadContract({
@@ -25,37 +27,56 @@ export function useEscrowData(address: `0x${string}` | undefined) {
     functionName: 'totalAmount',
   });
 
-  const { data: currentMilestone, isLoading: l5 } = useReadContract({
-    ...contractBase,
-    functionName: 'currentMilestone',
-  });
-
-  const { data: milestoneCount, isLoading: l6 } = useReadContract({
+  const { data: milestoneCount, isLoading: l5 } = useReadContract({
     ...contractBase,
     functionName: 'getMilestoneCount',
   });
 
-  const { data: jobMetadataHash, isLoading: l7 } = useReadContract({
+  // jobMetadataHash is bytes32 on-chain; decode to string for display
+  const { data: rawJobMetadataHash, isLoading: l6 } = useReadContract({
     ...contractBase,
     functionName: 'jobMetadataHash',
   });
 
-  const { data: token, isLoading: l8 } = useReadContract({
+  const { data: token, isLoading: l7 } = useReadContract({
     ...contractBase,
     functionName: 'token',
   });
 
-  const isLoading = l1 || l2 || l3 || l4 || l5 || l6 || l7 || l8;
+  const { data: releasedAmount, isLoading: l8 } = useReadContract({
+    ...contractBase,
+    functionName: 'releasedAmount',
+  });
+
+  // New: renamed from `arbitration` to `arbitrationContract`
+  const { data: arbitrationContract, isLoading: l9 } = useReadContract({
+    ...contractBase,
+    functionName: 'arbitrationContract',
+  });
+
+  const { data: disputeId, isLoading: l10 } = useReadContract({
+    ...contractBase,
+    functionName: 'disputeId',
+  });
+
+  const isLoading = l1 || l2 || l3 || l4 || l5 || l6 || l7 || l8 || l9 || l10;
 
   return {
     client: client as `0x${string}` | undefined,
     freelancer: freelancer as `0x${string}` | undefined,
-    state: state as number | undefined,
+    // Expose as both `status` (new name) and `state` (backwards compat for existing components)
+    status: status as number | undefined,
+    state: status as number | undefined,
     totalAmount: totalAmount as bigint | undefined,
-    currentMilestone: currentMilestone as bigint | undefined,
+    releasedAmount: releasedAmount as bigint | undefined,
     milestoneCount: milestoneCount as bigint | undefined,
-    jobMetadataHash: jobMetadataHash as string | undefined,
+    // Decode bytes32 → human-readable string
+    jobMetadataHash: rawJobMetadataHash
+      ? fromBytes32(rawJobMetadataHash as `0x${string}`)
+      : undefined,
     token: token as `0x${string}` | undefined,
+    arbitrationContract: arbitrationContract as `0x${string}` | undefined,
+    disputeId: disputeId as bigint | undefined,
     isLoading,
   };
 }
@@ -64,26 +85,28 @@ export function useMilestone(
   escrowAddress: `0x${string}` | undefined,
   index: bigint | number
 ) {
+  // Use getMilestone (tuple return) instead of the raw milestones() mapping
   const { data, isLoading } = useReadContract({
     address: escrowAddress,
     abi: ESCROW_ABI,
-    functionName: 'milestones',
+    functionName: 'getMilestone',
     args: [BigInt(index)],
-    query: {
-      enabled: !!escrowAddress,
-    },
+    query: { enabled: !!escrowAddress },
   });
 
   const milestone = data as
-    | [bigint, boolean, boolean, boolean, string]
+    | { amount: bigint; metadataHash: `0x${string}`; submitted: boolean; approved: boolean; paid: boolean }
     | undefined;
 
   return {
-    amount: milestone?.[0],
-    submitted: milestone?.[1],
-    approved: milestone?.[2],
-    paid: milestone?.[3],
-    metadataHash: milestone?.[4],
+    amount: milestone?.amount,
+    submitted: milestone?.submitted,
+    approved: milestone?.approved,
+    paid: milestone?.paid,
+    // Decode bytes32 → string for display
+    metadataHash: milestone?.metadataHash
+      ? fromBytes32(milestone.metadataHash)
+      : undefined,
     isLoading,
   };
 }
@@ -101,19 +124,18 @@ export function useEscrowActions(escrowAddress: `0x${string}` | undefined) {
     });
   };
 
-  const addMilestones = (amounts: bigint[], metadataHashes: string[]) => {
+  const addMilestones = (amounts: bigint[], metadataStrings: string[]) => {
+    // Convert string labels → bytes32 for the contract
+    const hashes = metadataStrings.map((s) => toBytes32(s)) as readonly `0x${string}`[];
     writeContract({
       ...contractBase,
       functionName: 'addMilestones',
-      args: [amounts, metadataHashes],
+      args: [amounts, hashes],
     });
   };
 
   const acceptJob = () => {
-    writeContract({
-      ...contractBase,
-      functionName: 'acceptJob',
-    });
+    writeContract({ ...contractBase, functionName: 'acceptJob' });
   };
 
   const submitMilestone = (index: bigint | number) => {
@@ -140,12 +162,9 @@ export function useEscrowActions(escrowAddress: `0x${string}` | undefined) {
     });
   };
 
-  const raiseDispute = (disputeId: bigint | number) => {
-    writeContract({
-      ...contractBase,
-      functionName: 'raiseDispute',
-      args: [BigInt(disputeId)],
-    });
+  // New contract: raiseDispute() takes NO arguments
+  const raiseDispute = () => {
+    writeContract({ ...contractBase, functionName: 'raiseDispute' });
   };
 
   return {

@@ -81,12 +81,15 @@ function EscrowRow({
     );
   }
 
-  const state = Number(data.state ?? 0);
+  const state = Number(data.status ?? 0);
   const client = data.client ?? '0x';
   const freelancer = data.freelancer ?? '0x';
   const totalAmount = data.totalAmount ?? 0n;
   const milestoneCount = Number(data.milestoneCount ?? 0);
-  const currentMilestone = Number(data.currentMilestone ?? 0);
+  const releasedAmount = data.releasedAmount ?? 0n;
+  const currentMilestone = milestoneCount > 0 && totalAmount > 0n
+    ? Math.min(Number(releasedAmount * BigInt(milestoneCount) / totalAmount), milestoneCount)
+    : 0;
   const jobTitle = data.jobMetadataHash || shortenAddress(address);
 
   // Apply filters
@@ -141,7 +144,7 @@ function EscrowRow({
       <td className="px-8 py-7">
         <div className="flex flex-col">
           <span className="text-base font-black text-text-primary">{formatEth(totalAmount)} <span className="text-[10px] font-bold text-primary">ETH</span></span>
-          <span className="text-[9px] text-text-dim uppercase tracking-[0.2em] font-black mt-1">Native Swap</span>
+          <span className="text-[9px] text-text-dim uppercase tracking-[0.2em] font-black mt-1">ETH</span>
         </div>
       </td>
       <td className="px-8 py-7">

@@ -7,11 +7,9 @@ import { useUserEscrows, useEscrowCount } from '@/hooks/useEscrowFactory';
 import { useEscrowData } from '@/hooks/useEscrow';
 import { useArbitrationData } from '@/hooks/useArbitration';
 import StatsCard from '@/components/dashboard/StatsCard';
-import ActivityFeed from '@/components/dashboard/ActivityFeed';
-import EscrowChart from '@/components/dashboard/EscrowChart';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { MOCK_ACTIVITY, MOCK_CHART_DATA } from '@/lib/mockData';
+import { Card } from '@/components/ui/Card';
 import { formatEth, getStateLabel, shortenAddress } from '@/lib/utils';
 
 const STATE_BADGE_VARIANT: Record<number, 'info' | 'warning' | 'success' | 'danger' | 'default'> = {
@@ -53,10 +51,13 @@ function DashboardEscrowItem({ address, index }: { address: `0x${string}`; index
     );
   }
 
-  const state = Number(data.state ?? 0);
+  const state = Number(data.status ?? 0);
   const totalAmount = data.totalAmount ?? 0n;
   const milestoneCount = Number(data.milestoneCount ?? 0);
-  const currentMilestone = Number(data.currentMilestone ?? 0);
+  const releasedAmount = data.releasedAmount ?? 0n;
+  const currentMilestone = milestoneCount > 0 && totalAmount > 0n
+    ? Math.min(Number(releasedAmount * BigInt(milestoneCount) / totalAmount), milestoneCount)
+    : 0;
   const jobTitle = data.jobMetadataHash || shortenAddress(address);
 
   return (
@@ -161,9 +162,13 @@ export default function Dashboard() {
         />
       </motion.div>
 
-      {/* Chart Section */}
+      {/* Chart Section — live data requires indexer (The Graph), coming in V2 */}
       <motion.div variants={fadeUp}>
-        <EscrowChart data={MOCK_CHART_DATA} />
+        <Card className="p-8 flex flex-col items-center justify-center min-h-[180px] gap-3 text-center border-dashed">
+          <Zap className="w-8 h-8 text-text-dim" />
+          <p className="text-sm font-bold text-text-muted">Live chart data coming soon</p>
+          <p className="text-xs text-text-dim">On-chain activity indexing via The Graph — V2 feature</p>
+        </Card>
       </motion.div>
 
       {/* Bottom Grid */}
@@ -217,7 +222,11 @@ export default function Dashboard() {
 
         {/* Activity Feed - 4/12 */}
         <div className="lg:col-span-4">
-          <ActivityFeed activities={MOCK_ACTIVITY} />
+          <Card className="p-6 h-full flex flex-col items-center justify-center gap-3 text-center border-dashed">
+            <AlertTriangle className="w-7 h-7 text-text-dim" />
+            <p className="text-sm font-bold text-text-muted">Activity feed coming soon</p>
+            <p className="text-xs text-text-dim">Requires on-chain event indexing</p>
+          </Card>
         </div>
       </motion.div>
     </motion.div>

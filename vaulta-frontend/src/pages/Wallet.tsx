@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useAccount, useBalance } from 'wagmi';
-import { motion } from 'framer-motion';
+import { useAccount, useBalance, useChainId, useSendTransaction } from 'wagmi';
+import { parseEther } from 'viem';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Wallet as WalletIcon,
   Copy,
@@ -9,48 +10,51 @@ import {
   ArrowDownLeft,
   Shield,
   CheckCircle,
-  Clock,
   TrendingUp,
+  X,
 } from 'lucide-react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { useStore } from '@/store/useStore';
 import { useUserEscrows } from '@/hooks/useEscrowFactory';
 import { useJurorStatus } from '@/hooks/useArbitration';
-import { formatEth, cn } from '@/lib/utils';
+import { formatEth, getExplorerUrl, cn } from '@/lib/utils';
 
 const containerVariants = {
   hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.1 }
-  }
+  show: { opacity: 1, transition: { staggerChildren: 0.1 } },
 } as const;
 
 const itemVariants = {
   hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.23, 1, 0.32, 1] } }
+  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.23, 1, 0.32, 1] } },
 } as const;
-
-const MOCK_TRANSACTIONS = [
-  { type: 'out', label: 'Fund Escrow #12', amount: '2.5 ETH', time: '2 hours ago', status: 'confirmed' },
-  { type: 'in', label: 'Milestone Release', amount: '1.0 ETH', time: '1 day ago', status: 'confirmed' },
-  { type: 'out', label: 'Juror Stake', amount: '0.15 ETH', time: '3 days ago', status: 'confirmed' },
-  { type: 'in', label: 'Dispute Reward', amount: '0.08 ETH', time: '5 days ago', status: 'confirmed' },
-  { type: 'out', label: 'Fund Escrow #9', amount: '5.0 ETH', time: '1 week ago', status: 'confirmed' },
-];
 
 export default function Wallet() {
   const { address, isConnected } = useAccount();
   const { data: balance } = useBalance({ address });
   const addToast = useStore((s) => s.addToast);
+  const chainId = useChainId();
   const [copied, setCopied] = useState(false);
+
+  // Send modal state
+  const [showSend, setShowSend] = useState(false);
+  const [sendTo, setSendTo] = useState('');
+  const [sendAmount, setSendAmount] = useState('');
+
+  // Receive modal state
+  const [showReceive, setShowReceive] = useState(false);
+
+  const { sendTransaction, isPending: isSending } = useSendTransaction();
 
   const { escrows } = useUserEscrows(address);
   const { stake: jurorStake } = useJurorStatus(address);
+
+  const explorerUrl = address ? getExplorerUrl(chainId, address) : null;
 
   const copyAddress = () => {
     if (address) {
@@ -59,6 +63,22 @@ export default function Wallet() {
       addToast({ type: 'success', message: 'Address copied to clipboard' });
       setTimeout(() => setCopied(false), 2000);
     }
+  };
+
+  const handleSend = () => {
+    if (!sendTo || !sendAmount) return;
+    sendTransaction(
+      { to: sendTo as `0x${string}`, value: parseEther(sendAmount) },
+      {
+        onSuccess: () => {
+          addToast({ type: 'success', message: `Sent ${sendAmount} ETH` });
+          setShowSend(false);
+          setSendTo('');
+          setSendAmount('');
+        },
+        onError: (e) => addToast({ type: 'error', message: e.message }),
+      }
+    );
   };
 
   if (!isConnected) {
@@ -74,7 +94,7 @@ export default function Wallet() {
         <div className="space-y-3">
           <h2 className="text-3xl font-black text-text-primary tracking-tight">Connect Your Wallet</h2>
           <p className="text-text-muted font-medium max-w-md">
-            Connect a Web3 wallet to view your balances, transaction history, and escrow positions.
+            Connect a Web3 wallet to view your balances and escrow positions.
           </p>
         </div>
         <ConnectButton />
@@ -117,11 +137,19 @@ export default function Wallet() {
                 </p>
               </div>
               <div className="flex items-center gap-3">
-                <Button variant="primary" className="shadow-glow-primary font-black uppercase text-[10px] tracking-widest h-12 px-6">
+                <Button
+                  variant="primary"
+                  onClick={() => setShowSend(true)}
+                  className="shadow-glow-primary font-black uppercase text-[10px] tracking-widest h-12 px-6"
+                >
                   <ArrowUpRight className="w-4 h-4 mr-2" />
                   Send
                 </Button>
-                <Button variant="outline" className="font-black uppercase text-[10px] tracking-widest h-12 px-6">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowReceive(true)}
+                  className="font-black uppercase text-[10px] tracking-widest h-12 px-6"
+                >
                   <ArrowDownLeft className="w-4 h-4 mr-2" />
                   Receive
                 </Button>
@@ -145,15 +173,21 @@ export default function Wallet() {
                 {copied ? <CheckCircle className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
                 {copied ? 'Copied' : 'Copy'}
               </button>
-              <a
-                href={`https://etherscan.io/address/${address}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-all text-xs font-bold text-text-muted"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                Explorer
-              </a>
+              {explorerUrl ? (
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-all text-xs font-bold text-text-muted"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  Explorer
+                </a>
+              ) : (
+                <span className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/[0.02] border border-white/5 text-xs font-bold text-text-dim">
+                  Local Network
+                </span>
+              )}
             </div>
           </Card>
         </motion.div>
@@ -197,53 +231,127 @@ export default function Wallet() {
         </Card>
       </motion.div>
 
-      {/* Transaction History */}
+      {/* Transaction History — replaced mock with on-chain prompt */}
       <motion.div variants={itemVariants}>
         <Card className="p-8">
           <div className="flex items-center justify-between mb-8">
             <h3 className="text-xl font-black text-text-primary tracking-tight">Recent Activity</h3>
-            <Badge variant="default" className="text-[10px] uppercase font-black tracking-widest">Last 30 Days</Badge>
           </div>
-
-          <div className="space-y-4">
-            {MOCK_TRANSACTIONS.map((tx, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between p-4 rounded-2xl bg-white/[0.02] border border-white/5 hover:bg-white/[0.04] transition-all group"
+          <div className="flex flex-col items-center justify-center py-12 gap-4 text-center">
+            <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+              <TrendingUp className="w-6 h-6 text-text-dim" />
+            </div>
+            <p className="text-sm font-bold text-text-muted">Live transaction history coming soon.</p>
+            {explorerUrl && (
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-xs font-bold text-primary hover:underline"
               >
-                <div className="flex items-center gap-4">
-                  <div className={cn(
-                    "w-10 h-10 rounded-xl flex items-center justify-center",
-                    tx.type === 'in'
-                      ? "bg-green-500/10 border border-green-500/20 text-green-500"
-                      : "bg-primary/10 border border-primary/20 text-primary"
-                  )}>
-                    {tx.type === 'in' ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-text-primary">{tx.label}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <Clock className="w-3 h-3 text-text-dim" />
-                      <p className="text-[10px] text-text-dim font-bold uppercase tracking-widest">{tx.time}</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className={cn(
-                    "text-sm font-black font-mono",
-                    tx.type === 'in' ? "text-green-500" : "text-text-primary"
-                  )}>
-                    {tx.type === 'in' ? '+' : '-'}{tx.amount}
-                  </p>
-                  <Badge variant="success" className="text-[8px] font-black uppercase mt-1">{tx.status}</Badge>
-                </div>
-              </div>
-            ))}
+                View all transactions on Block Explorer
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
           </div>
         </Card>
       </motion.div>
 
-      {/* Decorative Elements */}
+      {/* ── Send Modal ── */}
+      <AnimatePresence>
+        {showSend && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => setShowSend(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-background border border-white/10 rounded-3xl p-8 w-full max-w-md space-y-6 shadow-2xl"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-black text-text-primary">Send ETH</h2>
+                <button onClick={() => setShowSend(false)} className="p-2 rounded-xl hover:bg-white/5 transition-all">
+                  <X className="w-5 h-5 text-text-dim" />
+                </button>
+              </div>
+              <Input
+                label="Recipient Address"
+                placeholder="0x..."
+                value={sendTo}
+                onChange={(e) => setSendTo(e.target.value)}
+              />
+              <Input
+                label="Amount (ETH)"
+                type="number"
+                placeholder="0.00"
+                step="0.001"
+                min="0"
+                value={sendAmount}
+                onChange={(e) => setSendAmount(e.target.value)}
+              />
+              <div className="flex gap-3 pt-2">
+                <Button variant="ghost" className="flex-1" onClick={() => setShowSend(false)}>Cancel</Button>
+                <Button
+                  variant="primary"
+                  className="flex-1 shadow-glow-primary"
+                  loading={isSending}
+                  disabled={!sendTo || !sendAmount || isSending}
+                  onClick={handleSend}
+                >
+                  Send
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Receive Modal ── */}
+      <AnimatePresence>
+        {showReceive && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4"
+            onClick={() => setShowReceive(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-background border border-white/10 rounded-3xl p-8 w-full max-w-md space-y-6 shadow-2xl"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-black text-text-primary">Receive ETH</h2>
+                <button onClick={() => setShowReceive(false)} className="p-2 rounded-xl hover:bg-white/5 transition-all">
+                  <X className="w-5 h-5 text-text-dim" />
+                </button>
+              </div>
+              <div className="p-5 rounded-2xl bg-white/[0.03] border border-white/10">
+                <p className="text-[10px] font-black text-text-dim uppercase tracking-widest mb-3">Your Address</p>
+                <p className="font-mono text-sm text-text-primary break-all">{address}</p>
+              </div>
+              <Button
+                variant="primary"
+                className="w-full"
+                onClick={() => { copyAddress(); setShowReceive(false); }}
+              >
+                <Copy className="w-4 h-4 mr-2" />
+                Copy Address
+              </Button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="fixed top-1/3 -left-20 w-96 h-96 bg-primary/5 blur-[120px] rounded-full pointer-events-none -z-10" />
       <div className="fixed bottom-1/3 -right-20 w-96 h-96 bg-secondary/5 blur-[120px] rounded-full pointer-events-none -z-10" />
     </motion.div>

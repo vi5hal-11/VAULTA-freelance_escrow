@@ -132,9 +132,22 @@ export default function Landing() {
         </div>
         
         <div className="hidden md:flex items-center gap-10">
-           {['Protocol', 'Ecosystem', 'Governance', 'Docs'].map((item) => (
-             <a key={item} href="#" className="text-xs font-black uppercase tracking-[0.2em] text-text-dim hover:text-primary transition-colors">{item}</a>
-           ))}
+          <a
+            href="#features"
+            onClick={(e) => { e.preventDefault(); document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }); }}
+            className="text-xs font-black uppercase tracking-[0.2em] text-text-dim hover:text-primary transition-colors cursor-pointer"
+          >Protocol</a>
+          <a
+            href="#features"
+            onClick={(e) => { e.preventDefault(); document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }); }}
+            className="text-xs font-black uppercase tracking-[0.2em] text-text-dim hover:text-primary transition-colors cursor-pointer"
+          >Docs</a>
+          <a
+            href="https://github.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs font-black uppercase tracking-[0.2em] text-text-dim hover:text-primary transition-colors"
+          >GitHub</a>
         </div>
 
         <ConnectButton.Custom>
@@ -222,7 +235,10 @@ export default function Landing() {
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </button>
           
-          <button className="h-16 px-10 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-xl text-text-primary font-black uppercase tracking-[0.2em] text-xs hover:bg-white/[0.06] transition-all flex items-center gap-3">
+          <button
+            onClick={() => document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' })}
+            className="h-16 px-10 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-xl text-text-primary font-black uppercase tracking-[0.2em] text-xs hover:bg-white/[0.06] transition-all flex items-center gap-3"
+          >
             <Zap className="w-4 h-4 text-secondary" />
             Explore Docs
           </button>
@@ -230,7 +246,7 @@ export default function Landing() {
       </section>
 
       {/* Feature Section */}
-      <section className="relative z-10 max-w-7xl mx-auto px-6 py-32">
+      <section id="features" className="relative z-10 max-w-7xl mx-auto px-6 py-32">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {FEATURES.map((feature, i) => {
             const Icon = feature.icon;
@@ -287,9 +303,9 @@ export default function Landing() {
           </div>
 
           <div className="flex items-center gap-8">
-            <a href="#" className="text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-white transition-colors">Twitter</a>
-            <a href="#" className="text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-white transition-colors">Discord</a>
-            <a href="#" className="text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-white transition-colors">GitHub</a>
+            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-white transition-colors">Twitter</a>
+            <a href="https://discord.com" target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-white transition-colors">Discord</a>
+            <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-text-dim hover:text-white transition-colors">GitHub</a>
           </div>
 
           <p className="text-[10px] font-black uppercase tracking-widest text-text-dim">© 2026 Vaulta Protocols. All Rights Reserved.</p>

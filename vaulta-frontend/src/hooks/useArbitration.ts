@@ -12,9 +12,10 @@ export function useArbitrationData() {
     functionName: 'disputeCount',
   });
 
+  // Renamed from MIN_STAKE → minimumStake in the new contract
   const { data: minStake, isLoading: l2 } = useReadContract({
     ...contractBase,
-    functionName: 'MIN_STAKE',
+    functionName: 'minimumStake',
   });
 
   const { data: jurorsPerDispute, isLoading: l3 } = useReadContract({
@@ -31,27 +32,38 @@ export function useArbitrationData() {
 }
 
 export function useJurorStatus(address: `0x${string}` | undefined) {
+  // Use the dedicated getJurorInfo view (returns stakedAmount, active)
   const { data, isLoading } = useReadContract({
     address: ARBITRATION_ADDRESS,
     abi: ARBITRATION_ABI,
-    functionName: 'jurors',
+    functionName: 'getJurorInfo',
     args: address ? [address] : undefined,
-    query: {
-      enabled: !!address,
-    },
+    query: { enabled: !!address },
   });
 
-  const juror = data as [bigint, boolean] | undefined;
+  const juror = data as { stakedAmount: bigint; active: boolean } | [bigint, boolean] | undefined;
+
+  // Support both object and tuple return shapes from wagmi
+  const stakedAmount =
+    juror && typeof juror === 'object' && !Array.isArray(juror)
+      ? (juror as { stakedAmount: bigint }).stakedAmount
+      : (juror as [bigint, boolean] | undefined)?.[0];
+
+  const active =
+    juror && typeof juror === 'object' && !Array.isArray(juror)
+      ? (juror as { active: boolean }).active
+      : (juror as [bigint, boolean] | undefined)?.[1];
 
   return {
-    stake: juror?.[0],
-    active: juror?.[1],
+    stake: stakedAmount,      // kept as `stake` for backwards compat with existing UI
+    stakedAmount,
+    active,
     isLoading,
   };
 }
 
 export function useDisputeInfo(disputeId: bigint | number | undefined) {
-  const enabled = disputeId !== undefined;
+  const enabled = disputeId !== undefined && BigInt(disputeId ?? 0) > 0n;
   const args = enabled ? [BigInt(disputeId!)] as const : undefined;
 
   const { data: jurors, isLoading: l1 } = useReadContract({
@@ -70,19 +82,28 @@ export function useDisputeInfo(disputeId: bigint | number | undefined) {
     query: { enabled },
   });
 
-  const status = votingStatus as [bigint, bigint, boolean] | undefined;
+  // getVotingStatus returns (uint8 clientVotes, uint8 freelancerVotes, bool resolved)
+  const status = votingStatus as
+    | { clientVotes: number; freelancerVotes: number; resolved: boolean }
+    | [number, number, boolean]
+    | undefined;
+
+  const clientVotes = Array.isArray(status) ? status[0] : status?.clientVotes;
+  const freelancerVotes = Array.isArray(status) ? status[1] : status?.freelancerVotes;
+  const resolved = Array.isArray(status) ? status[2] : status?.resolved;
 
   return {
+    // getJurors returns address[3] — cast to an array for iteration
     jurors: (jurors as `0x${string}`[] | undefined) ?? [],
-    clientVotes: status?.[0],
-    freelancerVotes: status?.[1],
-    resolved: status?.[2],
+    clientVotes,
+    freelancerVotes,
+    resolved,
     isLoading: l1 || l2,
   };
 }
 
 export function useDisputeEscrow(disputeId: bigint | number | undefined) {
-  const enabled = disputeId !== undefined;
+  const enabled = disputeId !== undefined && BigInt(disputeId ?? 0) > 0n;
   const { data, isLoading } = useReadContract({
     address: ARBITRATION_ADDRESS,
     abi: ARBITRATION_ABI,
@@ -105,6 +126,14 @@ export function useArbitrationActions() {
     });
   };
 
+  const withdrawStake = () => {
+    writeContract({
+      address: ARBITRATION_ADDRESS,
+      abi: ARBITRATION_ABI,
+      functionName: 'withdrawStake',
+    });
+  };
+
   const vote = (disputeId: bigint | number, decision: number) => {
     writeContract({
       address: ARBITRATION_ADDRESS,
@@ -114,5 +143,5 @@ export function useArbitrationActions() {
     });
   };
 
-  return { actions: { stake, vote }, isPending, hash };
+  return { actions: { stake, withdrawStake, vote }, isPending, hash };
 }

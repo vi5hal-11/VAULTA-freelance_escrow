@@ -21,7 +21,7 @@ import { Card } from '@/components/ui/Card';
 import { useCreateEscrow } from '@/hooks/useEscrowFactory';
 import { useStore } from '@/store/useStore';
 import { ESCROW_ABI, FACTORY_ADDRESS } from '@/lib/contracts';
-import { cn } from '@/lib/utils';
+import { cn, toBytes32 } from '@/lib/utils';
 
 interface Milestone {
   name: string;
@@ -69,10 +69,14 @@ export default function CreateEscrow() {
   // Step 1
   const [projectTitle, setProjectTitle] = useState('');
   const [freelancerAddress, setFreelancerAddress] = useState('');
-  const [tokenAddress, setTokenAddress] = useState(
-    '0x0000000000000000000000000000000000000000'
-  );
+  // useERC20 toggles between native ETH and a custom ERC-20 token
+  const [useERC20, setUseERC20] = useState(false);
+  const [tokenAddress, setTokenAddress] = useState('');
   const [jobMetadataHash, setJobMetadataHash] = useState('');
+
+  const resolvedToken: `0x${string}` = useERC20 && tokenAddress
+    ? tokenAddress as `0x${string}`
+    : '0x0000000000000000000000000000000000000000';
 
   // Step 2
   const [milestones, setMilestones] = useState<Milestone[]>([
@@ -126,7 +130,7 @@ export default function CreateEscrow() {
     addToast({ type: 'pending', message: 'Initiating deployment...' });
     createEscrow(
       freelancerAddress as `0x${string}`,
-      tokenAddress as `0x${string}`,
+      resolvedToken,
       jobMetadataHash || projectTitle
     );
   };
@@ -143,7 +147,8 @@ export default function CreateEscrow() {
     setNewEscrowAddress(escrow);
     addToast({ type: 'pending', message: 'Adding milestones on-chain...' });
     const amounts = milestones.map((m) => parseEther(m.amount));
-    const hashes = milestones.map((m) => m.name);
+    // Contract expects bytes32[] — encode each milestone name
+    const hashes = milestones.map((m) => toBytes32(m.name)) as `0x${string}`[];
     writeMilestones({
       address: escrow,
       abi: ESCROW_ABI,
@@ -271,19 +276,52 @@ export default function CreateEscrow() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input
-                  label="Settlement Currency"
-                  placeholder="0x0...0 for Native ETH"
-                  value={tokenAddress}
-                  onChange={(e) => setTokenAddress(e.target.value)}
-                  description="ERC-20 token address or empty for ETH."
-                />
+                {/* Settlement currency: ETH toggle or ERC-20 address */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-black uppercase tracking-widest text-text-dim">
+                    Settlement Currency
+                  </label>
+                  <div className="flex gap-2 mb-1">
+                    <button
+                      type="button"
+                      onClick={() => setUseERC20(false)}
+                      className={cn(
+                        'flex-1 py-2 rounded-xl text-xs font-bold border transition-all',
+                        !useERC20
+                          ? 'bg-primary/10 border-primary/40 text-primary'
+                          : 'bg-white/5 border-white/10 text-text-dim hover:bg-white/10'
+                      )}
+                    >
+                      ETH (Native)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setUseERC20(true)}
+                      className={cn(
+                        'flex-1 py-2 rounded-xl text-xs font-bold border transition-all',
+                        useERC20
+                          ? 'bg-primary/10 border-primary/40 text-primary'
+                          : 'bg-white/5 border-white/10 text-text-dim hover:bg-white/10'
+                      )}
+                    >
+                      ERC-20 Token
+                    </button>
+                  </div>
+                  {useERC20 && (
+                    <Input
+                      placeholder="0x... ERC-20 token address"
+                      value={tokenAddress}
+                      onChange={(e) => setTokenAddress(e.target.value)}
+                      error={useERC20 && tokenAddress && !isValidAddress(tokenAddress) ? 'Invalid token address' : undefined}
+                    />
+                  )}
+                </div>
                 <Input
                   label="Job Specification (IPFS)"
-                  placeholder="Qm... or JSON string"
+                  placeholder="Qm... or brief description"
                   value={jobMetadataHash}
                   onChange={(e) => setJobMetadataHash(e.target.value)}
-                  description="Optional metadata or requirements hash."
+                  description="Optional. Stored on-chain as bytes32."
                 />
               </div>
 
@@ -421,7 +459,7 @@ export default function CreateEscrow() {
                     {[
                       { label: 'Agreement', value: projectTitle },
                       { label: 'Recipient', value: `${freelancerAddress.slice(0, 10)}...${freelancerAddress.slice(-8)}`, mono: true },
-                      { label: 'Settlement', value: tokenAddress.startsWith('0x0000') ? 'Native Ethereum (ETH)' : 'ERC-20 Protocol' },
+                      { label: 'Settlement', value: useERC20 && tokenAddress ? `ERC-20: ${tokenAddress.slice(0,10)}...` : 'Native Ethereum (ETH)' },
                     ].map((item, i) => (
                       <div key={i} className="px-6 py-5 flex justify-between items-center group/review">
                         <span className="text-[10px] font-black uppercase tracking-widest text-text-dim group-hover/review:text-text-muted transition-colors">{item.label}</span>
